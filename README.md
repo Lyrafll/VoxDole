@@ -1,27 +1,30 @@
 # VoxDole
 
-Automated voicemail (répondeur) for the Glutte VHF relay. HEIG-VD Bachelor
-Thesis project. See `ARCHITECTURE.md` (currently at the repo root of the
-`TB` project, one level up) for the full design.
+VoxDole is an automated voicemail system for the Glutte VHF relay on the Massif de la Dole,
+built as part of my Bachelor thesis at HEIG-VD. When someone can't reach the person they're
+calling over the relay, they can leave them a voice message instead, and the recipient can
+call back later to hear it. The full design is written up in `ARCHITECTURE.md`, one level up
+in the `TB` project folder.
 
-## Structure
+## Project layout
 
-- `onboard/` — everything that runs on the board. Self-contained: this is
-  the Docker build root.
-- `outboard/` — dev-only tooling that never ships (TTS clip generation).
+The code is split into two parts. `onboard/` is everything that actually runs on the board:
+it's a self-contained Docker build, so it can be copied over and built there directly.
+`outboard/` is tooling I only use on my own machine during development, mainly for generating
+the voice prompts, and none of it ever gets deployed.
 
-## Setup
+## Getting set up
 
 ```bash
 python -m venv .venv
-.venv/Scripts/activate   # or source .venv/bin/activate on Linux
+.venv/Scripts/activate   # source .venv/bin/activate on Linux
 pip install -r outboard/requirements.txt -r onboard/requirements.txt
 ```
 
-### TTS voice model (dev-only, for generating clips)
+### Getting the TTS voice model
 
-Not committed to the repo (61MB binary, not worth the repo bloat).
-Download it and place it at `outboard/models/piper/`:
+I didn't commit this to the repo since it's a 61MB binary file and didn't seem worth the repo
+size. Download it yourself and place it in `outboard/models/piper/`:
 
 ```bash
 mkdir -p outboard/models/piper
@@ -31,16 +34,17 @@ curl -L -o outboard/models/piper/fr_FR-siwis-medium.onnx.json \
     https://huggingface.co/rhasspy/piper-voices/resolve/main/fr/fr_FR/siwis/medium/fr_FR-siwis-medium.onnx.json
 ```
 
-Then generate the TTS clips:
+Then generate the voice clips:
 
 ```bash
 cd outboard
 python generate_tts.py
 ```
 
-Writes one `.wav` per `tts_manifest.txt` line into `onboard/assets/tts/`.
+This reads through `tts_manifest.txt` and writes one `.wav` file per line into
+`onboard/assets/tts/`.
 
-## Running locally
+## Running it locally
 
 ```bash
 cd onboard
@@ -48,7 +52,8 @@ python main.py --list-devices
 python main.py --device N --output-device M
 ```
 
-Type `QSOON` / `QSOOFF` to simulate the relay's squelch signal.
+Since I don't have real relay hardware on my desk, I simulate the squelch signal by typing
+`QSOON` and `QSOOFF` in the terminal.
 
 ## Deploying to the board
 
@@ -61,5 +66,6 @@ docker build -t voxdole .
 docker run --rm -it --device /dev/snd -v ~/voxdole-data:/data -e VOXDOLE_DATA_DIR=/data voxdole
 ```
 
-`VOXDOLE_DATA_DIR` controls where `voxdole.db` and recorded messages live
--- without the volume mount, `docker run --rm` deletes them on exit.
+`VOXDOLE_DATA_DIR` is what tells the app where to store `voxdole.db` and the recorded messages.
+Without mounting a volume there, `docker run --rm` wipes everything as soon as the container
+stops.
