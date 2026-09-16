@@ -6,6 +6,10 @@
 # $ git config --global mergetool.keepBackup false
 *.orig
 
+### VoxDole
+thinking/
+onboard/messages/*.wav
+
 # Created by git when using merge tools for conflicts
 *.BACKUP.*
 *.BASE.*
@@ -230,3 +234,10 @@ $RECYCLE.BIN/
 *.lnk
 
 # End of https://www.toptal.com/developers/gitignore/api/python,windows,linux,git
+
+### VoxDole-specific ###
+# TTS voice model -- 61MB binary, not worth committing. See README for
+# where to download it from.
+models/
+# runtime DB, not source
+voxdole.db
