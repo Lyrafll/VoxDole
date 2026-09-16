@@ -1,11 +1,9 @@
-"""Compose a spoken callsign at runtime by concatenating pre-generated
-phonetic-alphabet/digit clips from assets/tts/.
-
-Usage:
-    python -m tts.compose HB9EGM
-    python -m tts.compose HB9EGM --play
-    python -m tts.compose HB9EGM --out hb9egm.wav
-"""
+# Compose a spoken callsign at runtime by concatenating pre-generated
+# phonetic-alphabet/digit clips from assets/tts/.
+#
+# python -m tts.compose HB9EGM
+# python -m tts.compose HB9EGM --play
+# python -m tts.compose HB9EGM --out hb9egm.wav
 from __future__ import annotations
 
 import argparse

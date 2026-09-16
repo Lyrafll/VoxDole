@@ -1,14 +1,12 @@
-"""Squelch/QSO-open signal source -- tells the pipeline when a transmission
-starts and ends. Confirmed with Matthias: Glutte's relay exposes this as a
-GPIO *level*, active for the whole QSO (not two separate edge pulses).
-GpioSquelchSource will read it directly once the pin is wired up. Until
-then, KeyboardSquelchSource drives the same event from typed commands --
-same interface, swap the source later.
-
-Usage:
-    python -m audio.gate --keyboard              # type QSOON / QSOOFF
-    python -m audio.gate --gpio /dev/gpiochip0 17 # press the real button
-"""
+# Squelch/QSO signal source. Tells the workflow when a transmission starts
+# and ends. Confirmed with Matthias that Glutte's relay exposes this as a
+# GPIO level, active for the whole QSO (not two separate edge pulses).
+# GpioSquelchSource reads it directly once the pin is wired up, and until
+# then KeyboardSquelchSource fakes the same event with typed commands, same
+# interface either way.
+#
+# python -m audio.gate --keyboard              (type QSOON / QSOOFF)
+# python -m audio.gate --gpio /dev/gpiochip0 17 (press the real button)
 from __future__ import annotations
 
 import abc

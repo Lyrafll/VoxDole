@@ -235,8 +235,10 @@ class Workflow:
         audio = b"".join(self._message_audio)
         self._message_audio = []
         self._recording_this_qso = False
-        self.save_message(self.caller_callsign, self.receiver_callsign, audio)
-        self._play(config.PHRASE_MESSAGE_RECORDED)
+        # skip empty recordings, e.g. releasing the button right after the beep
+        if audio:
+            self.save_message(self.caller_callsign, self.receiver_callsign, audio)
+            self._play(config.PHRASE_MESSAGE_RECORDED)
         self._reset()
 
     def _play(self, pending: str | tuple[str, str]) -> None:

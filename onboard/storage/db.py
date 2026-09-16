@@ -1,8 +1,6 @@
-"""Message storage: SQLite, file-based.
-
-Usage:
-    python -m storage.db --self-test
-"""
+# Message storage: SQLite, file-based.
+#
+# python -m storage.db --self-test
 from __future__ import annotations
 
 import sqlite3

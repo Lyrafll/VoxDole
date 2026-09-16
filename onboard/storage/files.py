@@ -1,4 +1,4 @@
-"""Audio file storage for recorded messages."""
+# Audio file storage for recorded messages.
 from __future__ import annotations
 
 from datetime import datetime
