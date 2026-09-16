@@ -39,13 +39,6 @@ CANCELABLE_STATES = WAITING_STATES
 
 
 def _strip_confidence(words: list[str]) -> list[str]:
-    """Vosk marks a below-threshold word as "[word]" (see result_text() in
-    stt/engine.py). Strip that for keyword matching (glutte/intent/confirm/
-    cancel) so a merely-uncertain recognition of a closed-vocabulary word
-    still counts -- extract_callsigns() still gets the original bracketed
-    words, since it deliberately treats a bracket as an uncertain-token
-    marker that breaks a callsign run.
-    """
     return [w[1:-1] if w.startswith("[") and w.endswith("]") else w for w in words]
 
 
@@ -125,19 +118,9 @@ class Workflow:
             if self.state in CANCELABLE_STATES and self._check_cancel(clean_words):
                 return
 
-            # a single result can carry the whole trigger phrase ("glutte
-            # laisser un message" in one breath) -- check intent on the same
-            # words right after glutte transitions us into GLUTTE_HEARD.
-            # Deliberately NOT a general cascade across every state: letting
-            # ASK<->CONFIRM re-dispatch the same words caused a real
-            # infinite loop (a stray "non" in mid-callsign hesitation text
-            # got reinterpreted as a confirm answer, bouncing forever).
             if self.state == State.LISTENING:
                 self._check_glutte(clean_words)
 
-            # extract_callsigns() wants the ORIGINAL (bracketed) words -- a
-            # low-confidence letter should still break a callsign run. Every
-            # other check wants clean_words -- see _strip_confidence().
             match self.state:
                 case State.GLUTTE_HEARD:
                     self._check_intent(clean_words)
@@ -235,7 +218,6 @@ class Workflow:
         audio = b"".join(self._message_audio)
         self._message_audio = []
         self._recording_this_qso = False
-        # skip empty recordings, e.g. releasing the button right after the beep
         if audio:
             self.save_message(self.caller_callsign, self.receiver_callsign, audio)
             self._play(config.PHRASE_MESSAGE_RECORDED)

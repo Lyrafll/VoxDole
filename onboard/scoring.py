@@ -24,9 +24,6 @@ _EXCLUDED_TOKEN = "excludedmarker"
 
 
 def _tokenize(text: str) -> list[str]:
-    # bracketed = excluded (low confidence, or "[unk]"); replaced with a
-    # placeholder rather than deleted, so it still breaks a run instead of
-    # letting two callsigns merge across it
     text = re.sub(r"\[[^\]]*\]", f" {_EXCLUDED_TOKEN} ", text)
     folded = fold(text)
     folded = re.sub(r"[^a-z0-9\s'\-]", " ", folded)

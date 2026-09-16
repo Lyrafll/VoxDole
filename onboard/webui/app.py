@@ -1,8 +1,3 @@
-# Read-only web dashboard for recorded messages. Runs as its own process
-# alongside main.py, reading the same SQLite DB, never writes to it, so
-# it's safe to run (or restart) independently of the répondeur itself.
-#
-# Run from the onboard/ directory, same as main.py:
 # python3 -m webui.app [--host 0.0.0.0] [--port 8080]
 from __future__ import annotations
 

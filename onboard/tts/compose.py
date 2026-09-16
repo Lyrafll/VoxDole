@@ -1,6 +1,3 @@
-# Compose a spoken callsign at runtime by concatenating pre-generated
-# phonetic-alphabet/digit clips from assets/tts/.
-#
 # python -m tts.compose HB9EGM
 # python -m tts.compose HB9EGM --play
 # python -m tts.compose HB9EGM --out hb9egm.wav
@@ -15,7 +12,6 @@ import soundfile as sf
 ROOT = Path(__file__).resolve().parent.parent
 ASSETS_DIR = ROOT / "assets" / "tts"
 
-# letter -> clip filename (matches tts_manifest.txt)
 LETTER_WORD = {
     "A": "alpha", "B": "bravo", "C": "charlie", "D": "delta", "E": "echo",
     "F": "foxtrot", "G": "golf", "H": "hotel", "I": "india", "J": "juliet",
@@ -55,10 +51,6 @@ def concat(*clips: tuple[np.ndarray, int], pause_ms: float = 80.0) -> tuple[np.n
 
 
 def compose(text: str, pause_ms: float = 40.0, assets_dir: Path = ASSETS_DIR) -> tuple[np.ndarray, int]:
-    """Concatenate one clip per char in `text` (letters/digits only,
-    everything else skipped), with a short silence gap between each.
-    Returns (samples, sample_rate).
-    """
     chars = [c for c in text if c.isalnum()]
     if not chars:
         raise ValueError(f"nothing composable in {text!r}")

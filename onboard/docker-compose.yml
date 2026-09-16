@@ -10,9 +10,7 @@ services:
       - /data/voxdole:/app/data
     environment:
       - VOXDOLE_DATA_DIR=/app/data
-    # devices change at each board reboot, check with --list-devices
     command: ["--device", "9", "--output-device", "11"]
-    # needed for KeyboardSquelchSource (QSOON/QSOOFF over stdin)
     stdin_open: true
     tty: true
 

@@ -1,5 +1,3 @@
-# Message storage: SQLite, file-based.
-#
 # python -m storage.db --self-test
 from __future__ import annotations
 
@@ -23,10 +21,6 @@ CREATE TABLE IF NOT EXISTS messages (
 
 
 def connect(db_path: Path = DEFAULT_DB_PATH) -> sqlite3.Connection:
-    # check_same_thread=False: the connection is created once (main thread)
-    # but used from whichever thread the squelch source calls back on. Safe
-    # here since it's never touched by two threads at the same time, only
-    # sequentially by different ones.
     conn = sqlite3.connect(db_path, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.execute(SCHEMA)
@@ -36,7 +30,6 @@ def connect(db_path: Path = DEFAULT_DB_PATH) -> sqlite3.Connection:
 
 def add_message(conn: sqlite3.Connection, sender_callsign: str, recipient_callsign: str,
                  audio_path: str, recorded_at: str | None = None) -> int:
-    """Insert a new message, pending delivery. Returns its id."""
     if recorded_at is None:
         recorded_at = datetime.now(timezone.utc).isoformat()
     cur = conn.execute(
@@ -49,7 +42,6 @@ def add_message(conn: sqlite3.Connection, sender_callsign: str, recipient_callsi
 
 
 def get_pending_messages(conn: sqlite3.Connection, recipient_callsign: str) -> list[sqlite3.Row]:
-    """All undelivered messages for a recipient, oldest first."""
     cur = conn.execute(
         "SELECT * FROM messages WHERE recipient_callsign = ? AND delivered = 0 "
         "ORDER BY recorded_at ASC",
@@ -64,7 +56,6 @@ def mark_delivered(conn: sqlite3.Connection, message_id: int) -> None:
 
 
 def get_all_messages(conn: sqlite3.Connection) -> list[sqlite3.Row]:
-    """All messages, newest first -- for the web dashboard."""
     cur = conn.execute("SELECT * FROM messages ORDER BY recorded_at DESC")
     return cur.fetchall()
 
@@ -75,7 +66,6 @@ def get_message(conn: sqlite3.Connection, message_id: int) -> sqlite3.Row | None
 
 
 def _self_test() -> None:
-    """Insert, close, reopen, query -- checks persistence across connections."""
     import tempfile
 
     with tempfile.TemporaryDirectory() as tmp:

@@ -1,12 +1,5 @@
-# Squelch/QSO signal source. Tells the workflow when a transmission starts
-# and ends. Confirmed with Matthias that Glutte's relay exposes this as a
-# GPIO level, active for the whole QSO (not two separate edge pulses).
-# GpioSquelchSource reads it directly once the pin is wired up, and until
-# then KeyboardSquelchSource fakes the same event with typed commands, same
-# interface either way.
-#
-# python -m audio.gate --keyboard              (type QSOON / QSOOFF)
-# python -m audio.gate --gpio /dev/gpiochip0 17 (press the real button)
+# python -m audio.gate --keyboard
+# python -m audio.gate --gpio /dev/gpiochip0 17
 from __future__ import annotations
 
 import abc
@@ -14,12 +7,10 @@ import threading
 import time
 from typing import Callable
 
-SquelchCallback = Callable[[bool], None]  # called with True on open, False on close
+SquelchCallback = Callable[[bool], None]
 
 
 class SquelchSource(abc.ABC):
-    """Abstract trigger for "a transmission just started/ended"."""
-
     def __init__(self) -> None:
         self._callbacks: list[SquelchCallback] = []
 
@@ -32,7 +23,7 @@ class SquelchSource(abc.ABC):
 
     @abc.abstractmethod
     def start(self) -> None:
-        """Start listening for events (non-blocking -- spawns its own thread)."""
+        ...
 
     @abc.abstractmethod
     def stop(self) -> None:
@@ -40,11 +31,6 @@ class SquelchSource(abc.ABC):
 
 
 class KeyboardSquelchSource(SquelchSource):
-    """Dev/testing source: type QSOON / QSOOFF (case-insensitive) to
-    simulate the real GPIO level signal. Not a toggle -- matches the real
-    signal's shape (active for the whole QSO).
-    """
-
     def __init__(self) -> None:
         super().__init__()
         self.is_open = False
@@ -78,25 +64,6 @@ class KeyboardSquelchSource(SquelchSource):
 
 
 class GpioSquelchSource(SquelchSource):
-    """Real hardware source: a physical button wired to a GPIO line,
-    standing in for the relay's real squelch signal until that's wired up
-    for real (see GPIO_BUTTON_PLAN.md for the wiring/pin reasoning).
-
-    Active-low, matching the header's default internal pull-up: released
-    reads HIGH, pressed shorts the line to GND and reads LOW. `chip`/`line`
-    must come from actually running `gpioinfo`/`gpiomon` against the wired
-    button, not guessed from the datasheet's pin naming -- the kernel's
-    line names don't always match the board's silkscreen labels.
-
-    NOTE: written against the libgpiod v2 Python API (`gpiod` package) from
-    its documented behavior -- not verified against the board's actual
-    installed package, since that wasn't available to test from here. If
-    the exact method/class names below don't match what's installed,
-    smoke-test with `python -m audio.gate --gpio /dev/gpiochipN LINE`
-    first (fast, seconds per attempt) before wiring it into the full app --
-    much cheaper to debug there than through a full Docker rebuild.
-    """
-
     def __init__(self, chip: str, line: int, debounce_ms: float = 20.0) -> None:
         super().__init__()
         self.chip_path = chip
@@ -126,8 +93,6 @@ class GpioSquelchSource(SquelchSource):
         self._thread.start()
 
     def _loop(self) -> None:
-        import gpiod  # noqa: F401 -- only for the Type enum used below
-
         last_change = 0.0
         while not self._stop_flag.is_set():
             if not self._request.wait_edge_events(timeout=0.5):
@@ -137,7 +102,6 @@ class GpioSquelchSource(SquelchSource):
                 if now - last_change < self.debounce_s:
                     continue
                 last_change = now
-                # falling edge (HIGH->LOW) = button pressed = QSO opens
                 pressed = event.event_type.name == "FALLING_EDGE"
                 self.is_open = pressed
                 self._fire(pressed)
@@ -153,12 +117,9 @@ class GpioSquelchSource(SquelchSource):
 def main() -> None:
     import argparse
 
-    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    p = argparse.ArgumentParser()
     p.add_argument("--keyboard", action="store_true", help="use KeyboardSquelchSource for a standalone test")
-    p.add_argument("--gpio", nargs=2, metavar=("CHIP", "LINE"),
-                    help="use GpioSquelchSource for a standalone test, e.g. --gpio /dev/gpiochip0 17 "
-                         "-- fast way to confirm the button/chip/line actually work before wiring "
-                         "GpioSquelchSource into main.py")
+    p.add_argument("--gpio", nargs=2, metavar=("CHIP", "LINE"), help="use GpioSquelchSource for a standalone test")
     args = p.parse_args()
 
     if args.gpio:

@@ -1,9 +1,3 @@
-# Generate one WAV file per manifest entry using Piper TTS.
-#
-# Manifest format (see tts_manifest.txt): one entry per line,
-# filename;content to synthesize. "#" and blank lines are ignored.
-# Output goes to assets/tts/<filename>.wav.
-#
 # python generate_tts.py
 # python generate_tts.py --manifest custom_manifest.txt
 from __future__ import annotations
