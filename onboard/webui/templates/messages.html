@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>VoxDole — Messages</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
+  h1 { font-size: 1.4rem; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 0.5rem; border-bottom: 1px solid #ddd; }
+  .delivered { color: #2a7a2a; }
+  .pending { color: #c77700; font-weight: 600; }
+  audio { width: 220px; }
+  #empty { color: #888; font-style: italic; }
+</style>
+</head>
+<body>
+<h1>Messages — VoxDole</h1>
+<table>
+  <thead>
+    <tr><th>Appelant</th><th>Destinataire</th><th>Enregistré</th><th>Statut</th><th>Audio</th></tr>
+  </thead>
+  <tbody id="messages"></tbody>
+</table>
+<p id="empty" hidden>Aucun message.</p>
+
+<script>
+const knownIds = new Set();
+const tbody = document.querySelector("#messages");
+const empty = document.querySelector("#empty");
+
+function renderRow(msg) {
+  const tr = document.createElement("tr");
+  const recorded = new Date(msg.recorded_at).toLocaleString();
+  tr.innerHTML = `
+    <td>${msg.sender_callsign}</td>
+    <td>${msg.recipient_callsign}</td>
+    <td>${recorded}</td>
+    <td class="${msg.delivered ? "delivered" : "pending"}">${msg.delivered ? "Livré" : "En attente"}</td>
+    <td><audio controls src="/audio/${msg.id}"></audio></td>
+  `;
+  return tr;
+}
+
+async function poll() {
+  const res = await fetch("/api/messages");
+  const messages = await res.json();
+  empty.hidden = messages.length > 0;
+  for (const msg of messages) {
+    if (knownIds.has(msg.id)) continue;
+    knownIds.add(msg.id);
+    tbody.prepend(renderRow(msg));
+  }
+}
+
+poll();
+setInterval(poll, 4000);
+</script>
+</body>
+</html>

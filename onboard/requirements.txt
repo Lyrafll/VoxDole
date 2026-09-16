@@ -1,0 +1,6 @@
+numpy
+soundfile
+sounddevice
+vosk
+flask
+gpiod>=2.0,<3.0

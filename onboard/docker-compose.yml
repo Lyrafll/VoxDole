@@ -1,0 +1,32 @@
+services:
+  app:
+    build: .
+    image: voxdole:latest
+    container_name: voxdole-app
+    restart: unless-stopped
+    devices:
+      - /dev/snd
+    volumes:
+      - /data/voxdole:/app/data
+    environment:
+      - VOXDOLE_DATA_DIR=/app/data
+    # devices change at each board reboot, check with --list-devices
+    command: ["--device", "9", "--output-device", "11"]
+    # needed for KeyboardSquelchSource (QSOON/QSOOFF over stdin)
+    stdin_open: true
+    tty: true
+
+  web:
+    image: voxdole:latest
+    container_name: voxdole-web
+    restart: unless-stopped
+    depends_on:
+      - app
+    volumes:
+      - /data/voxdole:/app/data
+    environment:
+      - VOXDOLE_DATA_DIR=/app/data
+    ports:
+      - "8080:8080"
+    entrypoint: ["python3"]
+    command: ["-m", "webui.app", "--port", "8080"]

@@ -1,0 +1,60 @@
+# filename;content -- one entry per line, "#" or blank lines ignored.
+# generate_tts.py reads this and writes assets/tts/<filename>.wav per line.
+
+# --- phonetic alphabet (used to compose callsigns at runtime) ---
+alpha;Alpha
+bravo;Bravo
+charlie;Charlie
+delta;Delta
+echo;Echo
+foxtrot;Foxtrot
+golf;Golf
+hotel;Hotel
+india;India
+juliet;Juliet
+kilo;Kilo
+lima;Lima
+mike;Mike
+november;November
+oscar;Oscar
+papa;Papa
+quebec;Quebec
+romeo;Romeo
+sierra;Sierra
+tango;Tango
+uniform;Uniform
+victor;Victor
+whiskey;Whiskey
+xray;Xray
+yankee;Yankee
+zulu;Zulu
+
+# --- digits (used to compose callsigns at runtime) ---
+digit_0;Zéro
+digit_1;Un
+digit_2;Deux
+digit_3;Trois
+digit_4;Quatre
+digit_5;Cinq
+digit_6;Six
+digit_7;Sept
+digit_8;Huit
+digit_9;Neuf
+
+# --- fixed phrases (played back verbatim, no composition) ---
+greeting;Ici la boîte vocale du relais de la Dole.
+message_recorded;Message enregistré. Au revoir.
+
+# --- workflow phrases ---
+ask_caller_callsign;Ici Glutte, veuillez donner votre indicatif.
+confirm_prefix;Votre indicatif est
+receiver_confirm_prefix;Le message est pour
+confirm_suffix;Est-ce correct ?
+retry_caller_callsign;Je n'ai pas compris, veuillez répéter votre indicatif.
+retry_receiver_callsign;Je n'ai pas compris, veuillez répéter l'indicatif du destinataire.
+ask_receiver;Pour qui est le message ?
+ask_record;Veuillez laisser votre message après le bip.
+no_messages;Vous n'avez aucun message en attente.
+message_from_prefix;Message de
+end_of_messages;Fin de vos messages. Au revoir.
+cancelled;Annulé. Au revoir.
