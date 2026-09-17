@@ -23,10 +23,34 @@ SQUELCH_OPEN = object()
 SQUELCH_CLOSE = object()
 
 
+def find_output_device(name_substr: str) -> int:
+    needle = name_substr.lower()
+    for i, dev in enumerate(sd.query_devices()):
+        if needle in dev["name"].lower() and dev["max_output_channels"] > 0:
+            return i
+    raise RuntimeError(f"no output device matching {name_substr!r} -- run --list-devices")
+
+
+def target_samplerate(device) -> float:
+    info = sd.query_devices(device) if device is not None else sd.query_devices(kind="output")
+    return info["default_samplerate"]
+
+
+def resample(audio: np.ndarray, orig_sr: int, target_sr: float) -> np.ndarray:
+    duration = len(audio) / orig_sr
+    n_new = int(round(duration * target_sr))
+    x_old = np.linspace(0, duration, len(audio))
+    x_new = np.linspace(0, duration, n_new)
+    return np.interp(x_new, x_old, audio).astype(np.float32)
+
+
 def main() -> None:
     p = argparse.ArgumentParser()
     p.add_argument("--device", type=int, default=None)
     p.add_argument("--output-device", type=int, default=None)
+    p.add_argument("--output-device-name", default=None,
+                    help="match the output device by name substring instead of a fixed index -- "
+                         "overrides --output-device if given")
     p.add_argument("--list-devices", action="store_true")
     p.add_argument("--squelch", choices=["keyboard", "gpio"], default="keyboard",
                     help="squelch signal source -- 'keyboard' (type QSOON/QSOOFF, default) "
@@ -42,10 +66,25 @@ def main() -> None:
         print(sd.query_devices())
         return
 
+    output_device = args.output_device
+    if args.output_device_name:
+        output_device = find_output_device(args.output_device_name)
+        print(f"--output-device-name {args.output_device_name!r} -> resolved to device index {output_device}")
+
+    output_rate = target_samplerate(output_device)
+
     db = connect(config.DB_PATH)
 
     def reply(audio: np.ndarray, sr: int) -> None:
-        sd.play(audio, sr, device=args.output_device)
+        # resampling here is needed for the PRO headset's raw output, which
+        # only accepts 44100Hz -- may or may not still be needed once this
+        # runs against the real I2S hardware
+        if sr != output_rate:
+            audio = resample(audio, sr, output_rate)
+            sr = output_rate
+        if audio.ndim == 1:
+            audio = np.column_stack([audio, audio])
+        sd.play(audio, sr, device=output_device)
         sd.wait()
 
     def save_message(caller: str, receiver: str, audio_bytes: bytes) -> None:

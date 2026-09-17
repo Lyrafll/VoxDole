@@ -78,8 +78,11 @@ class Workflow:
         with self._lock:
             if is_open:
                 self._on_qso_start()
+                pending = None
             else:
-                self._on_qso_end()
+                pending = self._on_qso_end()
+        if pending is not None:
+            self._play(pending)
 
     def _on_qso_start(self) -> None:
         if self.state == State.IDLE:
@@ -91,14 +94,12 @@ class Workflow:
         self._deadline = None
         self._recording_this_qso = self.state == State.RECORDING
 
-    def _on_qso_end(self) -> None:
+    def _on_qso_end(self) -> str | tuple[str, str] | None:
         if self._recording_this_qso:
-            self._finish_recording()
-            return
+            return self._finish_recording()
 
-        if self._pending_reply is not None:
-            self._play(self._pending_reply)
-            self._pending_reply = None
+        pending = self._pending_reply
+        self._pending_reply = None
 
         if self.state == State.ANNOUNCING:
             self._reset()
@@ -106,6 +107,8 @@ class Workflow:
             self._set_state(State.IDLE)
         elif self.state in WAITING_STATES:
             self._deadline = time.monotonic() + self.timeout_seconds
+
+        return pending
 
     def on_final_result(self, text: str) -> None:
         words = text.split()
@@ -134,6 +137,8 @@ class Workflow:
                     self._check_confirm(clean_words, "receiver")
 
     def on_audio_frame(self, frame: bytes) -> None:
+        if not self._recording_this_qso:
+            return
         with self._lock:
             if self._recording_this_qso:
                 self._message_audio.append(frame)
@@ -214,14 +219,16 @@ class Workflow:
             return
         self._words = []
 
-    def _finish_recording(self) -> None:
+    def _finish_recording(self) -> str | None:
         audio = b"".join(self._message_audio)
         self._message_audio = []
         self._recording_this_qso = False
+        pending = None
         if audio:
             self.save_message(self.caller_callsign, self.receiver_callsign, audio)
-            self._play(config.PHRASE_MESSAGE_RECORDED)
+            pending = config.PHRASE_MESSAGE_RECORDED
         self._reset()
+        return pending
 
     def _play(self, pending: str | tuple[str, str]) -> None:
         if isinstance(pending, str):
