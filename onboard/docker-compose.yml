@@ -10,7 +10,7 @@ services:
       - /data/voxdole:/app/data
     environment:
       - VOXDOLE_DATA_DIR=/app/data
-    command: ["--device", "9", "--output-device", "11"]
+    command: ["--device", "0", "--output-device-name", "PRO"]
     stdin_open: true
     tty: true
 
