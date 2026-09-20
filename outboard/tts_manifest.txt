@@ -58,3 +58,9 @@ no_messages;Vous n'avez aucun message en attente.
 message_from_prefix;Message de
 end_of_messages;Fin de vos messages. Au revoir.
 cancelled;Annulé. Au revoir.
+caller_ack_prefix;Bien reçu
+ask_receiver_suffix;, quel est l'indicatif du destinataire ?
+receiver_ack_prefix;Le message sera délivré à
+ask_record_suffix;. Veuillez le laisser après ce message.
+messages_for_prefix;Messages pour
+no_messages_for_prefix;Pas de messages en attente pour

@@ -6,11 +6,15 @@ services:
     restart: unless-stopped
     devices:
       - /dev/snd
+      - /dev/gpiochip2
+      - /dev/gpiochip0
     volumes:
       - /data/voxdole:/app/data
     environment:
       - VOXDOLE_DATA_DIR=/app/data
-    command: ["--device", "0", "--output-device-name", "PRO"]
+    command: ["--input-device-name", "C930e", "--output-device-name", "PRO","--relay-signal", "gpio",
+          "--relay-qso-chip", "/dev/gpiochip2", "--relay-qso-line", "10",
+          "--relay-wake-chip", "/dev/gpiochip0", "--relay-wake-line", "4"]
     stdin_open: true
     tty: true
 

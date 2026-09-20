@@ -12,7 +12,7 @@ import numpy as np
 import sounddevice as sd
 
 import config
-from audio.gate import GpioSquelchSource, KeyboardSquelchSource
+from relay import GpioRelaySignalSource, KeyboardRelaySignalSource
 from stt.engine import VoskEngine
 from stt.grammar import identifier_grammar
 from storage.db import add_message, connect, get_pending_messages, mark_delivered
@@ -31,6 +31,14 @@ def find_output_device(name_substr: str) -> int:
     raise RuntimeError(f"no output device matching {name_substr!r} -- run --list-devices")
 
 
+def find_input_device(name_substr: str) -> int:
+    needle = name_substr.lower()
+    for i, dev in enumerate(sd.query_devices()):
+        if needle in dev["name"].lower() and dev["max_input_channels"] > 0:
+            return i
+    raise RuntimeError(f"no input device matching {name_substr!r} -- run --list-devices")
+
+
 def target_samplerate(device) -> float:
     info = sd.query_devices(device) if device is not None else sd.query_devices(kind="output")
     return info["default_samplerate"]
@@ -47,24 +55,40 @@ def resample(audio: np.ndarray, orig_sr: int, target_sr: float) -> np.ndarray:
 def main() -> None:
     p = argparse.ArgumentParser()
     p.add_argument("--device", type=int, default=None)
+    p.add_argument("--input-device-name", default=None,
+                    help="match the input device by name substring instead of a fixed index -- "
+                         "overrides --device if given")
     p.add_argument("--output-device", type=int, default=None)
     p.add_argument("--output-device-name", default=None,
                     help="match the output device by name substring instead of a fixed index -- "
                          "overrides --output-device if given")
     p.add_argument("--list-devices", action="store_true")
-    p.add_argument("--squelch", choices=["keyboard", "gpio"], default="keyboard",
-                    help="squelch signal source -- 'keyboard' (type QSOON/QSOOFF, default) "
-                         "or 'gpio' (a physical button, requires --gpio-chip and --gpio-line)")
-    p.add_argument("--gpio-chip", default=None, help="e.g. /dev/gpiochip0 -- required if --squelch gpio")
-    p.add_argument("--gpio-line", type=int, default=None, help="line offset -- required if --squelch gpio")
+    p.add_argument("--relay-signal", choices=["keyboard", "gpio"], default="keyboard",
+                    help="relay signal source -- 'keyboard' (type QSOON/QSOOFF/OPEN1/OISIF, default) "
+                         "or 'gpio' (the real relay pins, requires --relay-qso-chip and --relay-qso-line)")
+    p.add_argument("--relay-qso-chip", default=None, help="e.g. /dev/gpiochip2 -- required if --relay-signal gpio")
+    p.add_argument("--relay-qso-line", type=int, default=None, help="QSO (squelch) line offset")
+    p.add_argument("--relay-wake-chip", default=None, help="optional -- OPEN1 (wake) chip")
+    p.add_argument("--relay-wake-line", type=int, default=None, help="optional -- OPEN1 (wake) line offset")
+    p.add_argument("--relay-sleep-chip", default=None, help="optional -- OISIF (sleep) chip")
+    p.add_argument("--relay-sleep-line", type=int, default=None, help="optional -- OISIF (sleep) line offset")
     args = p.parse_args()
 
-    if args.squelch == "gpio" and (args.gpio_chip is None or args.gpio_line is None):
-        p.error("--squelch gpio requires both --gpio-chip and --gpio-line")
+    if args.relay_signal == "gpio" and (args.relay_qso_chip is None or args.relay_qso_line is None):
+        p.error("--relay-signal gpio requires --relay-qso-chip and --relay-qso-line")
+    if (args.relay_wake_chip is None) != (args.relay_wake_line is None):
+        p.error("--relay-wake-chip and --relay-wake-line must be given together")
+    if (args.relay_sleep_chip is None) != (args.relay_sleep_line is None):
+        p.error("--relay-sleep-chip and --relay-sleep-line must be given together")
 
     if args.list_devices:
         print(sd.query_devices())
         return
+
+    input_device = args.device
+    if args.input_device_name:
+        input_device = find_input_device(args.input_device_name)
+        print(f"--input-device-name {args.input_device_name!r} -> resolved to device index {input_device}")
 
     output_device = args.output_device
     if args.output_device_name:
@@ -119,14 +143,27 @@ def main() -> None:
 
     def on_squelch(is_open: bool) -> None:
         q.put(SQUELCH_OPEN if is_open else SQUELCH_CLOSE)
-        workflow.on_squelch(is_open)
+        if is_open:
+            workflow.on_squelch(True)
 
-    if args.squelch == "gpio":
-        squelch = GpioSquelchSource(chip=args.gpio_chip, line=args.gpio_line)
+    def on_relay_wake() -> None:
+        print("[RELAY] woke up (OPEN1)")
+        workflow.on_relay_wake()
+
+    def on_relay_sleep() -> None:
+        print("[RELAY] shut down (OISIF)")
+        workflow.on_relay_sleep()
+
+    if args.relay_signal == "gpio":
+        wake = (args.relay_wake_chip, args.relay_wake_line) if args.relay_wake_chip else None
+        sleep = (args.relay_sleep_chip, args.relay_sleep_line) if args.relay_sleep_chip else None
+        relay_source = GpioRelaySignalSource(qso=(args.relay_qso_chip, args.relay_qso_line), wake=wake, sleep=sleep)
     else:
-        squelch = KeyboardSquelchSource()
-    squelch.on_change(on_squelch)
-    squelch.start()
+        relay_source = KeyboardRelaySignalSource()
+    relay_source.on_qso(on_squelch)
+    relay_source.on_wake(on_relay_wake)
+    relay_source.on_sleep(on_relay_sleep)
+    relay_source.start()
 
     engine = VoskEngine(config.VOSK_MODEL_PATH, grammar=identifier_grammar(), min_confidence=config.MIN_CONFIDENCE)
     print("Loading vosk-grammar ...")
@@ -151,7 +188,7 @@ def main() -> None:
 
     print("Ready. STT only runs while QSO is on.\n")
     with sd.RawInputStream(
-        samplerate=config.SAMPLE_RATE, blocksize=4000, device=args.device,
+        samplerate=config.SAMPLE_RATE, blocksize=4000, device=input_device,
         dtype="int16", channels=1, callback=audio_callback,
     ):
         try:
@@ -159,8 +196,9 @@ def main() -> None:
                 item = q.get()
 
                 if item is SQUELCH_OPEN:
-                    recognizer.Reset()
-                    listening = True
+                    if workflow.stt_needed():
+                        recognizer.Reset()
+                        listening = True
                     continue
 
                 if item is SQUELCH_CLOSE:
@@ -170,6 +208,7 @@ def main() -> None:
                             print(f"[final] {text}")
                             workflow.on_final_result(text)
                         listening = False
+                    workflow.on_squelch(False)
                     continue
 
                 if not listening:

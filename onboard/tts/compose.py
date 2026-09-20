@@ -50,7 +50,7 @@ def concat(*clips: tuple[np.ndarray, int], pause_ms: float = 80.0) -> tuple[np.n
     return np.concatenate(pieces), sr
 
 
-def compose(text: str, pause_ms: float = 40.0, assets_dir: Path = ASSETS_DIR) -> tuple[np.ndarray, int]:
+def compose(text: str, pause_ms: float = 20.0, assets_dir: Path = ASSETS_DIR) -> tuple[np.ndarray, int]:
     chars = [c for c in text if c.isalnum()]
     if not chars:
         raise ValueError(f"nothing composable in {text!r}")

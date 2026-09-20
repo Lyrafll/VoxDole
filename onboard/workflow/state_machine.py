@@ -23,16 +23,12 @@ class State(Enum):
     LISTENING = auto()
     GLUTTE_HEARD = auto()
     CALLER_ID_ASK = auto()
-    CALLER_ID_CONFIRM = auto()
     RECEIVER_ID_ASK = auto()
-    RECEIVER_ID_CONFIRM = auto()
     RECORDING = auto()
     ANNOUNCING = auto()
 
 WAITING_STATES = {
-    State.CALLER_ID_ASK, State.CALLER_ID_CONFIRM,
-    State.RECEIVER_ID_ASK, State.RECEIVER_ID_CONFIRM,
-    State.RECORDING,
+    State.CALLER_ID_ASK, State.RECEIVER_ID_ASK, State.RECORDING,
 }
 
 CANCELABLE_STATES = WAITING_STATES
@@ -55,6 +51,8 @@ class Workflow:
         self.on_timeout = on_timeout
 
         self.state = State.IDLE
+        self.relay_awake = False
+        self._glutte_eligible = False
         self.purpose: str | None = None  # "leave" | "listen"
         self.caller_callsign: str | None = None
         self.receiver_callsign: str | None = None
@@ -76,6 +74,8 @@ class Workflow:
 
     def on_squelch(self, is_open: bool) -> None:
         with self._lock:
+            if not self.relay_awake:
+                return
             if is_open:
                 self._on_qso_start()
                 pending = None
@@ -83,6 +83,10 @@ class Workflow:
                 pending = self._on_qso_end()
         if pending is not None:
             self._play(pending)
+        if not is_open:
+            with self._lock:
+                if self.state in WAITING_STATES:
+                    self._deadline = time.monotonic() + self.timeout_seconds
 
     def _on_qso_start(self) -> None:
         if self.state == State.IDLE:
@@ -105,8 +109,6 @@ class Workflow:
             self._reset()
         elif self.state in (State.LISTENING, State.GLUTTE_HEARD):
             self._set_state(State.IDLE)
-        elif self.state in WAITING_STATES:
-            self._deadline = time.monotonic() + self.timeout_seconds
 
         return pending
 
@@ -129,12 +131,31 @@ class Workflow:
                     self._check_intent(clean_words)
                 case State.CALLER_ID_ASK:
                     self._check_callsign(words, "caller")
-                case State.CALLER_ID_CONFIRM:
-                    self._check_confirm(clean_words, "caller")
                 case State.RECEIVER_ID_ASK:
                     self._check_callsign(words, "receiver")
-                case State.RECEIVER_ID_CONFIRM:
-                    self._check_confirm(clean_words, "receiver")
+
+    def on_relay_wake(self) -> None:
+        with self._lock:
+            # TODO : This is only temporary. Using the same switch for wake/asleep
+            # TODO : To remove once OISIF gets a GPIO working
+            # This is because only 2 GPIO are working, hence using the wake one to simulate the OISIF state from the relay when relay is awake
+            if self.relay_awake:
+                self._go_to_sleep()
+            else:
+                self.relay_awake = True
+                self._glutte_eligible = True
+                self._deadline = time.monotonic() + self.timeout_seconds
+
+    def on_relay_sleep(self) -> None:
+        with self._lock:
+            self._go_to_sleep()
+
+    def stt_needed(self) -> bool:
+        if not self.relay_awake:
+            return False
+        if self.state in (State.IDLE, State.LISTENING) and not self._glutte_eligible:
+            return False
+        return True
 
     def on_audio_frame(self, frame: bytes) -> None:
         if not self._recording_this_qso:
@@ -164,6 +185,9 @@ class Workflow:
         if self._first_word_seen:
             return
         self._first_word_seen = True
+        if not self._glutte_eligible:
+            return
+        self._glutte_eligible = False
         if words[0] == "glutte":
             self._set_state(State.GLUTTE_HEARD)
 
@@ -189,35 +213,16 @@ class Workflow:
         self._words = []
         if target == "caller":
             self.caller_callsign = callsign
-            self._set_state(State.CALLER_ID_CONFIRM)
-            self._pending_reply = ("confirm_caller", callsign)
-        else:
-            self.receiver_callsign = callsign
-            self._set_state(State.RECEIVER_ID_CONFIRM)
-            self._pending_reply = ("confirm_receiver", callsign)
-
-    def _check_confirm(self, words: list[str], target: str) -> None:
-        if "oui" in words:
-            if target == "caller":
-                if self.purpose == "listen":
-                    self._set_state(State.ANNOUNCING)
-                    self._pending_reply = ("announce", self.caller_callsign)
-                else:
-                    self._set_state(State.RECEIVER_ID_ASK)
-                    self._pending_reply = config.PHRASE_ASK_RECEIVER
-            else:
-                self._set_state(State.RECORDING)
-                self._pending_reply = config.PHRASE_ASK_RECORD
-        elif "non" in words:
-            if target == "caller":
-                self._set_state(State.CALLER_ID_ASK)
-                self._pending_reply = config.PHRASE_RETRY_CALLER
+            if self.purpose == "listen":
+                self._set_state(State.ANNOUNCING)
+                self._pending_reply = ("announce", callsign)
             else:
                 self._set_state(State.RECEIVER_ID_ASK)
-                self._pending_reply = config.PHRASE_RETRY_RECEIVER
+                self._pending_reply = ("ask_receiver", callsign)
         else:
-            return
-        self._words = []
+            self.receiver_callsign = callsign
+            self._set_state(State.RECORDING)
+            self._pending_reply = ("ask_record", callsign)
 
     def _finish_recording(self) -> str | None:
         audio = b"".join(self._message_audio)
@@ -241,16 +246,22 @@ class Workflow:
             self._play_announcement(callsign)
             return
 
-        prefix = config.PHRASE_CONFIRM_PREFIX if kind == "confirm_caller" else config.PHRASE_RECEIVER_CONFIRM_PREFIX
-        audio, sr = concat(load_clip(prefix), compose(callsign), load_clip(config.PHRASE_CONFIRM_SUFFIX))
+        if kind == "ask_receiver":
+            prefix, suffix = config.PHRASE_CALLER_ACK_PREFIX, config.PHRASE_ASK_RECEIVER_SUFFIX
+        else:
+            prefix, suffix = config.PHRASE_RECEIVER_ACK_PREFIX, config.PHRASE_ASK_RECORD_SUFFIX
+        audio, sr = concat(load_clip(prefix), compose(callsign), load_clip(suffix))
         self.reply(audio, sr)
 
     def _play_announcement(self, callsign: str) -> None:
         messages = self.fetch_messages(callsign)
         if not messages:
-            audio, sr = load_clip(config.PHRASE_NO_MESSAGES)
+            audio, sr = concat(load_clip(config.PHRASE_NO_MESSAGES_FOR_PREFIX), compose(callsign))
             self.reply(audio, sr)
             return
+
+        intro, sr = concat(load_clip(config.PHRASE_MESSAGES_FOR_PREFIX), compose(callsign))
+        self.reply(intro, sr)
 
         for sender, audio in messages:
             intro, sr = concat(load_clip(config.PHRASE_MESSAGE_FROM_PREFIX), compose(sender))
@@ -259,6 +270,10 @@ class Workflow:
 
         audio, sr = load_clip(config.PHRASE_END_OF_MESSAGES)
         self.reply(audio, sr)
+
+    def _go_to_sleep(self) -> None:
+        self.relay_awake = False
+        self._reset()
 
     def _reset(self) -> None:
         self._set_state(State.IDLE)
