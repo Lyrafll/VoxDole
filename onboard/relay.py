@@ -2,10 +2,15 @@
 # python -m relay --qso /dev/gpiochip2 10 --wake /dev/gpiochip0 4
 from __future__ import annotations
 
+import argparse
+
 import abc
 import threading
 import time
 from typing import Callable
+
+import gpiod
+from gpiod.line import Bias, Direction, Edge
 
 QsoCallback = Callable[[bool], None]
 EdgeCallback = Callable[[], None]
@@ -50,7 +55,6 @@ class RelaySignalSource(abc.ABC):
 class KeyboardRelaySignalSource(RelaySignalSource):
     def __init__(self) -> None:
         super().__init__()
-        self.qso_open = False
         self._thread: threading.Thread | None = None
         self._stop_flag = threading.Event()
 
@@ -66,11 +70,9 @@ class KeyboardRelaySignalSource(RelaySignalSource):
             except EOFError:
                 break
             if line == "QSOON":
-                self.qso_open = True
                 print("  QSO -> OPEN")
                 self._fire_qso(True)
             elif line == "QSOOFF":
-                self.qso_open = False
                 print("  QSO -> CLOSED")
                 self._fire_qso(False)
             elif line == "OPEN1":
@@ -94,7 +96,6 @@ class GpioRelaySignalSource(RelaySignalSource):
                  debounce_ms: float = 20.0) -> None:
         super().__init__()
         self.debounce_s = debounce_ms / 1000.0
-        self.qso_open = False
         self._targets: dict[GpioLine, str] = {qso: "qso"}
         if wake is not None:
             self._targets[wake] = "wake"
@@ -105,9 +106,6 @@ class GpioRelaySignalSource(RelaySignalSource):
         self._stop_flag = threading.Event()
 
     def start(self) -> None:
-        import gpiod
-        from gpiod.line import Bias, Direction, Edge
-
         settings = gpiod.LineSettings(direction=Direction.INPUT, bias=Bias.PULL_UP, edge_detection=Edge.BOTH)
         by_chip: dict[str, dict[int, str]] = {}
         for (chip, line), kind in self._targets.items():
@@ -134,7 +132,6 @@ class GpioRelaySignalSource(RelaySignalSource):
             for offset, pressed in pending.items():
                 kind = lines_kinds[offset]
                 if kind == "qso":
-                    self.qso_open = pressed
                     self._fire_qso(pressed)
                 elif kind == "wake" and pressed:
                     self._fire_wake()
@@ -151,8 +148,6 @@ class GpioRelaySignalSource(RelaySignalSource):
 
 
 def main() -> None:
-    import argparse
-
     p = argparse.ArgumentParser()
     p.add_argument("--keyboard", action="store_true", help="use KeyboardRelaySignalSource for a standalone test")
     p.add_argument("--qso", nargs=2, metavar=("CHIP", "LINE"), help="QSO line -- required for a GPIO test")

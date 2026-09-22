@@ -1,11 +1,9 @@
 from __future__ import annotations
 
 import json
-import time
 from pathlib import Path
-from typing import Iterator, Optional, Sequence
+from typing import Optional, Sequence
 
-import soundfile as sf
 import vosk
 
 vosk.SetLogLevel(-1)
@@ -47,31 +45,3 @@ class VoskEngine:
             else:
                 parts.append(word)
         return " ".join(parts)
-
-    def transcribe_file(self, wav_path: Path) -> str:
-        data, sr = sf.read(wav_path, dtype="int16", always_2d=False)
-        if sr != self.sample_rate:
-            raise ValueError(f"{wav_path} is {sr} Hz, engine configured for {self.sample_rate} Hz")
-        rec = self.new_recognizer()
-        pcm_bytes = data.tobytes()
-        chunk = 4000
-        for i in range(0, len(pcm_bytes), chunk):
-            rec.AcceptWaveform(pcm_bytes[i:i + chunk])
-        return self.result_text(json.loads(rec.FinalResult()))
-
-    def transcribe_stream(self, frames: Iterator[bytes], sample_rate: int) -> Iterator[str]:
-        if sample_rate != self.sample_rate:
-            raise ValueError(f"stream is {sample_rate} Hz, engine expects {self.sample_rate} Hz")
-        rec = self.new_recognizer()
-        for frame in frames:
-            if rec.AcceptWaveform(frame):
-                text = self.result_text(json.loads(rec.Result()))
-                if text:
-                    yield f"[final] {text}"
-            else:
-                partial = json.loads(rec.PartialResult()).get("partial", "")
-                if partial:
-                    yield f"[partial] {partial}"
-        text = self.result_text(json.loads(rec.FinalResult()))
-        if text:
-            yield f"[final] {text}"

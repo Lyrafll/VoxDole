@@ -26,6 +26,6 @@ def save_message_audio(caller: str, receiver: str, recorded_at: datetime, audio:
 def load_message_audio(path: Path) -> tuple[np.ndarray, int]:
     return sf.read(path, dtype="float32")
 
-
+# TODO : Never used, and currently no way to delete a message
 def delete_message_audio(path: Path) -> None:
     Path(path).unlink(missing_ok=True)

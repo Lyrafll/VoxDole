@@ -12,6 +12,7 @@ import soundfile as sf
 ROOT = Path(__file__).resolve().parent.parent
 ASSETS_DIR = ROOT / "assets" / "tts"
 
+# Letter to International letter
 LETTER_WORD = {
     "A": "alpha", "B": "bravo", "C": "charlie", "D": "delta", "E": "echo",
     "F": "foxtrot", "G": "golf", "H": "hotel", "I": "india", "J": "juliet",
@@ -30,12 +31,12 @@ def _filename_for(char: str) -> str:
         return LETTER_WORD[char]
     raise ValueError(f"no TTS clip for character {char!r} -- only A-Z and 0-9 are composable")
 
-
+# Retrieve a pre-generated wav audio file
 def load_clip(name: str, assets_dir: Path = ASSETS_DIR) -> tuple[np.ndarray, int]:
     return sf.read(assets_dir / f"{name}.wav", dtype="float32")
 
-
-def concat(*clips: tuple[np.ndarray, int], pause_ms: float = 80.0) -> tuple[np.ndarray, int]:
+# Join clips of audio together
+def concat(*clips: tuple[np.ndarray, int], pause_ms: float = 20.0) -> tuple[np.ndarray, int]:
     sr = clips[0][1]
     for _, clip_sr in clips:
         if clip_sr != sr:
@@ -49,7 +50,7 @@ def concat(*clips: tuple[np.ndarray, int], pause_ms: float = 80.0) -> tuple[np.n
         pieces.append(audio)
     return np.concatenate(pieces), sr
 
-
+# Retrieve a clip for each letter of a callsign (eg. HB9UXF -> audio file for Hotel (Hotel.wav), Bravo, etc..)
 def compose(text: str, pause_ms: float = 20.0, assets_dir: Path = ASSETS_DIR) -> tuple[np.ndarray, int]:
     chars = [c for c in text if c.isalnum()]
     if not chars:
@@ -76,7 +77,7 @@ def compose(text: str, pause_ms: float = 20.0, assets_dir: Path = ASSETS_DIR) ->
         pieces.append(clip)
     return np.concatenate(pieces), sr
 
-
+# Standalone main to test the functionality
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("text", help="callsign to compose, e.g. HB9EGM")

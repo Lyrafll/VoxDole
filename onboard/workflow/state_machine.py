@@ -15,9 +15,8 @@ Reply = Callable[[np.ndarray, int], None]
 SaveMessage = Callable[[str, str, bytes], None]
 FetchMessages = Callable[[str], list[tuple[str, np.ndarray]]]
 StateChange = Callable[["State"], None]
-TimeoutHandler = Callable[["State"], None]
 
-
+# States of the app
 class State(Enum):
     IDLE = auto()
     LISTENING = auto()
@@ -31,24 +30,16 @@ WAITING_STATES = {
     State.CALLER_ID_ASK, State.RECEIVER_ID_ASK, State.RECORDING,
 }
 
-CANCELABLE_STATES = WAITING_STATES
-
-
 def _strip_confidence(words: list[str]) -> list[str]:
     return [w[1:-1] if w.startswith("[") and w.endswith("]") else w for w in words]
 
 
 class Workflow:
-    def __init__(self, reply: Reply, save_message: SaveMessage, fetch_messages: FetchMessages,
-                 timeout_seconds: float = config.REPLY_TIMEOUT_SECONDS,
-                 on_state_change: StateChange | None = None,
-                 on_timeout: TimeoutHandler | None = None):
+    def __init__(self, reply: Reply, save_message: SaveMessage, fetch_messages: FetchMessages, on_state_change: StateChange | None = None):
         self.reply = reply
         self.save_message = save_message
         self.fetch_messages = fetch_messages
-        self.timeout_seconds = timeout_seconds
         self.on_state_change = on_state_change
-        self.on_timeout = on_timeout
 
         self.state = State.IDLE
         self.relay_awake = False
@@ -59,10 +50,7 @@ class Workflow:
 
         self._words: list[str] = []
         self._first_word_seen = False
-        self._cancel_checked_this_qso = False
-        self._cancel_armed = False
         self._pending_reply: str | tuple[str, str] | None = None
-        self._deadline: float | None = None
         self._recording_this_qso = False
         self._message_audio: list[bytes] = []
         self._lock = threading.Lock()
@@ -83,19 +71,12 @@ class Workflow:
                 pending = self._on_qso_end()
         if pending is not None:
             self._play(pending)
-        if not is_open:
-            with self._lock:
-                if self.state in WAITING_STATES:
-                    self._deadline = time.monotonic() + self.timeout_seconds
 
     def _on_qso_start(self) -> None:
         if self.state == State.IDLE:
             self._set_state(State.LISTENING)
         self._words = []
         self._first_word_seen = False
-        self._cancel_checked_this_qso = False
-        self._cancel_armed = False
-        self._deadline = None
         self._recording_this_qso = self.state == State.RECORDING
 
     def _on_qso_end(self) -> str | tuple[str, str] | None:
@@ -120,9 +101,6 @@ class Workflow:
         clean_words = _strip_confidence(words)
 
         with self._lock:
-            if self.state in CANCELABLE_STATES and self._check_cancel(clean_words):
-                return
-
             if self.state == State.LISTENING:
                 self._check_glutte(clean_words)
 
@@ -144,12 +122,14 @@ class Workflow:
             else:
                 self.relay_awake = True
                 self._glutte_eligible = True
-                self._deadline = time.monotonic() + self.timeout_seconds
+                print("[VoxDole] woke up (RELAY: OPEN1)")
+
 
     def on_relay_sleep(self) -> None:
         with self._lock:
             self._go_to_sleep()
 
+    # Check if we are in a state to need the stt
     def stt_needed(self) -> bool:
         if not self.relay_awake:
             return False
@@ -164,24 +144,8 @@ class Workflow:
             if self._recording_this_qso:
                 self._message_audio.append(frame)
 
-    def tick(self) -> None:
-        with self._lock:
-            if self._deadline is not None and time.monotonic() > self._deadline:
-                if self.on_timeout:
-                    self.on_timeout(self.state)
-                self._reset()
-
-    def _check_cancel(self, words: list[str]) -> bool:
-        if not self._cancel_checked_this_qso:
-            self._cancel_checked_this_qso = True
-            self._cancel_armed = words[0] == "glutte"
-        if self._cancel_armed and "annule" in words:
-            self._reset()
-            self._pending_reply = config.PHRASE_CANCELLED
-            return True
-        return False
-
-    def _check_glutte(self, words: list[str]) -> None:
+    # "glutte" needs to be the first word heard when eligible (first transmission since relay up)
+    def _check_glutte(self, words: list[str]) -> None: # we don't even need to pass the whole list tho...
         if self._first_word_seen:
             return
         self._first_word_seen = True
@@ -274,6 +238,8 @@ class Workflow:
     def _go_to_sleep(self) -> None:
         self.relay_awake = False
         self._reset()
+        print("[VoxDole] went to sleep (RELAY: OISIF)")
+
 
     def _reset(self) -> None:
         self._set_state(State.IDLE)
@@ -282,9 +248,6 @@ class Workflow:
         self.receiver_callsign = None
         self._words = []
         self._first_word_seen = False
-        self._cancel_checked_this_qso = False
-        self._cancel_armed = False
         self._pending_reply = None
-        self._deadline = None
         self._recording_this_qso = False
         self._message_audio = []

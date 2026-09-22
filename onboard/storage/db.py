@@ -1,4 +1,3 @@
-# python -m storage.db --self-test
 from __future__ import annotations
 
 import sqlite3
@@ -8,6 +7,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_DB_PATH = ROOT / "voxdole.db"
 
+# TODO : maybe log when delivered ? just mmore info
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS messages (
     id INTEGER PRIMARY KEY,
@@ -28,10 +28,8 @@ def connect(db_path: Path = DEFAULT_DB_PATH) -> sqlite3.Connection:
     return conn
 
 
-def add_message(conn: sqlite3.Connection, sender_callsign: str, recipient_callsign: str,
-                 audio_path: str, recorded_at: str | None = None) -> int:
-    if recorded_at is None:
-        recorded_at = datetime.now(timezone.utc).isoformat()
+def add_message(conn: sqlite3.Connection, sender_callsign: str, recipient_callsign: str, audio_path: str) -> int:
+    recorded_at = datetime.now(timezone.utc).isoformat()
     cur = conn.execute(
         "INSERT INTO messages (sender_callsign, recipient_callsign, audio_path, recorded_at) "
         "VALUES (?, ?, ?, ?)",
@@ -64,7 +62,7 @@ def get_message(conn: sqlite3.Connection, message_id: int) -> sqlite3.Row | None
     cur = conn.execute("SELECT * FROM messages WHERE id = ?", (message_id,))
     return cur.fetchone()
 
-
+# TODO : can be removed ?
 def _self_test() -> None:
     import tempfile
 

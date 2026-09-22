@@ -52,8 +52,14 @@ python main.py --list-devices
 python main.py --device N --output-device M
 ```
 
-Since I don't have real relay hardware on my desk, I simulate the squelch signal by typing
-`QSOON` and `QSOOFF` in the terminal.
+Since I don't have real relay hardware on my desk, I simulate the relay's signals by typing in
+the terminal: `QSOON`/`QSOOFF` for squelch, and `OPEN1`/`OISIF` for the relay waking up and
+going back to sleep. The app only does anything between an `OPEN1` and the next `OISIF` (or a
+timeout standing in for a missed one) -- meant to mirror how the real relay would only be
+active while it's actually open.
+
+Device indices shift around across reboots, so `--input-device-name` and `--output-device-name`
+match a device by a substring of its name instead, e.g. `--output-device-name PRO`.
 
 ## Deploying to the board
 
@@ -61,11 +67,17 @@ Since I don't have real relay hardware on my desk, I simulate the squelch signal
 scp -r onboard torizon@<BOARD_IP>:~/voxdole
 ssh torizon@<BOARD_IP>
 cd ~/voxdole
-mkdir -p ~/voxdole-data
-docker build -t voxdole .
-docker run --rm -it --device /dev/snd -v ~/voxdole-data:/data -e VOXDOLE_DATA_DIR=/data voxdole
+docker compose up -d --build
 ```
 
-`VOXDOLE_DATA_DIR` is what tells the app where to store `voxdole.db` and the recorded messages.
-Without mounting a volume there, `docker run --rm` wipes everything as soon as the container
-stops.
+`docker-compose.yml` runs two containers: `app` (the répondeur itself) and `web` (the message
+archive, on port 8080). `VOXDOLE_DATA_DIR` is what tells the app where to store `voxdole.db`
+and the recorded messages -- both containers mount the same host folder there, so messages
+survive a rebuild.
+
+On the real board, `--relay-signal gpio` reads the QSO/wake/sleep signals from actual GPIO pins
+instead of the keyboard, each one its own `--relay-*-chip`/`--relay-*-line` pair (wake and
+sleep are optional -- without them the app just never hears those signals). Which
+`/dev/gpiochipN` and line number a given header pin actually maps to isn't documented anywhere
+for this board -- I had to find it empirically with `gpiomon`, pressing the pin and watching
+which line reacted.

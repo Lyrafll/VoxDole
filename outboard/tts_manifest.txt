@@ -42,22 +42,12 @@ digit_8;Huit
 digit_9;Neuf
 
 # --- fixed phrases (played back verbatim, no composition) ---
-greeting;Ici la boîte vocale du relais de la Dole.
 message_recorded;Message enregistré. Au revoir.
 
 # --- workflow phrases ---
 ask_caller_callsign;Ici Glutte, veuillez donner votre indicatif.
-confirm_prefix;Votre indicatif est
-receiver_confirm_prefix;Le message est pour
-confirm_suffix;Est-ce correct ?
-retry_caller_callsign;Je n'ai pas compris, veuillez répéter votre indicatif.
-retry_receiver_callsign;Je n'ai pas compris, veuillez répéter l'indicatif du destinataire.
-ask_receiver;Pour qui est le message ?
-ask_record;Veuillez laisser votre message après le bip.
-no_messages;Vous n'avez aucun message en attente.
 message_from_prefix;Message de
 end_of_messages;Fin de vos messages. Au revoir.
-cancelled;Annulé. Au revoir.
 caller_ack_prefix;Bien reçu
 ask_receiver_suffix;, quel est l'indicatif du destinataire ?
 receiver_ack_prefix;Le message sera délivré à

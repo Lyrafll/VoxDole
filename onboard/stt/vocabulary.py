@@ -12,4 +12,4 @@ PHONETIC: dict[str, list[str]] = {
 
 DIGIT_WORDS = ["zéro", "un", "deux", "trois", "quatre", "cinq", "six", "sept", "huit", "neuf"]
 
-CONTEXT_WORDS = ["ici", "glutte", "laisser", "message", "écouter", "oui", "non", "annule"]
+CONTEXT_WORDS = ["glutte", "laisser", "message", "écouter"]

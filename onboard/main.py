@@ -3,8 +3,6 @@ from __future__ import annotations
 import argparse
 import json
 import queue
-import threading
-import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -100,9 +98,10 @@ def main() -> None:
     db = connect(config.DB_PATH)
 
     def reply(audio: np.ndarray, sr: int) -> None:
-        # resampling here is needed for the PRO headset's raw output, which
-        # only accepts 44100Hz -- may or may not still be needed once this
-        # runs against the real I2S hardware
+        # resampling here is needed for the PRO headset raw output, which
+        # only accepts 44100Hz. Tho may or may not still be needed once this
+        # runs against the real I2S pins
+        # TODO : potentially adapt to the new way to reply (no headset, but a speaker)
         if sr != output_rate:
             audio = resample(audio, sr, output_rate)
             sr = output_rate
@@ -132,12 +131,7 @@ def main() -> None:
     def on_state_change(state) -> None:
         print(f"[STATE] {state.name} (caller={workflow.caller_callsign}, receiver={workflow.receiver_callsign})")
 
-    def on_timeout(state) -> None:
-        print(f"[TIMEOUT] no response in {state.name} (caller={workflow.caller_callsign}, "
-              f"receiver={workflow.receiver_callsign}) -- resetting to IDLE")
-
-    workflow = Workflow(reply=reply, save_message=save_message, fetch_messages=fetch_messages,
-                         on_state_change=on_state_change, on_timeout=on_timeout)
+    workflow = Workflow(reply=reply, save_message=save_message, fetch_messages=fetch_messages, on_state_change=on_state_change)
 
     q: "queue.Queue" = queue.Queue()
 
@@ -175,13 +169,6 @@ def main() -> None:
         frame = bytes(indata)
         workflow.on_audio_frame(frame)
         q.put(frame)
-
-    def timeout_loop() -> None:
-        while True:
-            time.sleep(1.0)
-            workflow.tick()
-
-    threading.Thread(target=timeout_loop, daemon=True).start()
 
     recognizer = engine.new_recognizer()
     listening = False
