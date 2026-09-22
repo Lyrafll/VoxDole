@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 
 import abc
+from enum import Enum, auto
 import threading
 import time
 from typing import Callable
@@ -14,6 +15,12 @@ from gpiod.line import Bias, Direction, Edge
 
 QsoCallback = Callable[[bool], None]
 EdgeCallback = Callable[[], None]
+
+class SignalKind(Enum):
+    QSO = auto()
+    WAKE = auto()
+    SLEEP = auto()
+
 
 
 class RelaySignalSource(abc.ABC):
@@ -51,7 +58,7 @@ class RelaySignalSource(abc.ABC):
     def stop(self) -> None:
         ...
 
-
+# "MOCK" signal source to interact with the keyboard if not pin can be provided. Uses keywords to ""simulate"" signal sent to pin to go through the state
 class KeyboardRelaySignalSource(RelaySignalSource):
     def __init__(self) -> None:
         super().__init__()
@@ -90,24 +97,24 @@ class KeyboardRelaySignalSource(RelaySignalSource):
 
 GpioLine = tuple[str, int]  # (chip path, line offset)
 
-
+# signal source from the relay through GPIO pins, intended usage for the relay. relay send signal to the pins to get into states
 class GpioRelaySignalSource(RelaySignalSource):
     def __init__(self, qso: GpioLine, wake: GpioLine | None = None, sleep: GpioLine | None = None,
                  debounce_ms: float = 20.0) -> None:
         super().__init__()
         self.debounce_s = debounce_ms / 1000.0
-        self._targets: dict[GpioLine, str] = {qso: "qso"}
+        self._targets: dict[GpioLine, SignalKind] = {qso: SignalKind.QSO}
         if wake is not None:
-            self._targets[wake] = "wake"
+            self._targets[wake] = SignalKind.WAKE
         if sleep is not None:
-            self._targets[sleep] = "sleep"
+            self._targets[sleep] = SignalKind.SLEEP
         self._requests = []
         self._threads: list[threading.Thread] = []
         self._stop_flag = threading.Event()
 
     def start(self) -> None:
         settings = gpiod.LineSettings(direction=Direction.INPUT, bias=Bias.PULL_UP, edge_detection=Edge.BOTH)
-        by_chip: dict[str, dict[int, str]] = {}
+        by_chip: dict[str, dict[int, SignalKind]] = {}
         for (chip, line), kind in self._targets.items():
             by_chip.setdefault(chip, {})[line] = kind
 
@@ -121,7 +128,7 @@ class GpioRelaySignalSource(RelaySignalSource):
             thread.start()
             self._threads.append(thread)
 
-    def _loop(self, request, lines_kinds: dict[int, str]) -> None:
+    def _loop(self, request, lines_kinds: dict[int, SignalKind]) -> None:
         pending: dict[int, bool] = {}
         while not self._stop_flag.is_set():
             if request.wait_edge_events(timeout=self.debounce_s):
@@ -131,11 +138,11 @@ class GpioRelaySignalSource(RelaySignalSource):
 
             for offset, pressed in pending.items():
                 kind = lines_kinds[offset]
-                if kind == "qso":
+                if kind == SignalKind.QSO:
                     self._fire_qso(pressed)
-                elif kind == "wake" and pressed:
+                elif kind == SignalKind.WAKE and pressed:
                     self._fire_wake()
-                elif kind == "sleep" and pressed:
+                elif kind == SignalKind.SLEEP and pressed:
                     self._fire_sleep()
             pending.clear()
 

@@ -16,6 +16,11 @@ SaveMessage = Callable[[str, str, bytes], None]
 FetchMessages = Callable[[str], list[tuple[str, np.ndarray]]]
 StateChange = Callable[["State"], None]
 
+class Purpose(Enum): 
+    LEAVE = auto()
+    LISTEN = auto()
+    UNDEFINED = auto() 
+
 # States of the app
 class State(Enum):
     IDLE = auto()
@@ -44,7 +49,7 @@ class Workflow:
         self.state = State.IDLE
         self.relay_awake = False
         self._glutte_eligible = False
-        self.purpose: str | None = None  # "leave" | "listen"
+        self.purpose: Purpose = Purpose.UNDEFINED
         self.caller_callsign: str | None = None
         self.receiver_callsign: str | None = None
 
@@ -155,19 +160,21 @@ class Workflow:
         if words[0] == "glutte":
             self._set_state(State.GLUTTE_HEARD)
 
+    # Check intent of first message. Leave a message or listen to voicemail
     def _check_intent(self, words: list[str]) -> None:
         self._words.extend(words)
-        has_message = "message" in self._words
+        has_message = "message" in self._words # TODO : could be constants so can be updated to other words later ? not liking the magic words
         if "laisser" in self._words and has_message:
-            self.purpose = "leave"
+            self.purpose = Purpose.LEAVE
         elif "écouter" in self._words and has_message:
-            self.purpose = "listen"
+            self.purpose = Purpose.LISTEN
         else:
             return
         self._set_state(State.CALLER_ID_ASK)
         self._pending_reply = config.PHRASE_ASK_CALLER
         self._words = []
 
+    # Check the callsign received (extract) then goes to next step
     def _check_callsign(self, words: list[str], target: str) -> None:
         self._words.extend(words)
         callsigns = extract_callsigns(" ".join(self._words))
@@ -177,12 +184,15 @@ class Workflow:
         self._words = []
         if target == "caller":
             self.caller_callsign = callsign
-            if self.purpose == "listen":
-                self._set_state(State.ANNOUNCING)
-                self._pending_reply = ("announce", callsign)
-            else:
-                self._set_state(State.RECEIVER_ID_ASK)
-                self._pending_reply = ("ask_receiver", callsign)
+            match self.purpose:
+                case Purpose.LISTEN:
+                    self._set_state(State.ANNOUNCING)
+                    self._pending_reply = ("announce", callsign)
+                case Purpose.LEAVE:    
+                    self._set_state(State.RECEIVER_ID_ASK)
+                    self._pending_reply = ("ask_receiver", callsign)
+                case _:
+                    self._reset()
         else:
             self.receiver_callsign = callsign
             self._set_state(State.RECORDING)
@@ -243,7 +253,7 @@ class Workflow:
 
     def _reset(self) -> None:
         self._set_state(State.IDLE)
-        self.purpose = None
+        self.purpose = Purpose.UNDEFINED
         self.caller_callsign = None
         self.receiver_callsign = None
         self._words = []

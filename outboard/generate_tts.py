@@ -30,7 +30,7 @@ def parse_manifest(path: Path) -> list[tuple[str, str]]:
         entries.append((filename, content))
     return entries
 
-
+# Use to generate the assets used by VoxDole
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--manifest", default=str(DEFAULT_MANIFEST))

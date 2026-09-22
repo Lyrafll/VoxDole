@@ -8,7 +8,7 @@ from flask import Flask, jsonify, render_template, send_file
 import config
 from storage.db import connect, get_all_messages, get_message
 
-
+# Very simple flask app, not in scope but nice to have !
 def create_app() -> Flask:
     app = Flask(__name__)
     db = connect(config.DB_PATH)
