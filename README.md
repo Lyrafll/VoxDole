@@ -87,15 +87,40 @@ Two options for `--relay-signal`:
 ```yaml
 command: [..., "--relay-signal", "keyboard"]
 ```
-Then type `QSOON`/`QSOOFF`/`OPEN1`/`OISIF` in the attached terminal to simulate the relay. 
+Then type `QSOON`/`QSOOFF`/`OPEN1`/`OISIF` in the attached terminal to simulate the relay (more info lower). 
+
+
 
 **Real GPIO pins**, once wired up:
 ```yaml
 command: [..., "--relay-signal", "gpio",
           "--relay-qso-chip", "/dev/gpiochipN", "--relay-qso-line", "N",
-          "--relay-wake-chip", "/dev/gpiochipN", "--relay-wake-line", "N"]
+          "--relay-wake-chip", "/dev/gpiochipN", "--relay-wake-line", "N",
+          "--relay-sleep-chip", "/dev/gpiochipN", "--relay-sleep-line", "N"]
 ```
-TODO : add the schema of the wired up board with the pins and the corresponding chip and offset for the board
+
+Currently, the project is wired as is for testing the pins :
+![](assets/pins.jpg)
+
+Sadly, there is no official documentation as to what pins maps to what gpiochip + offset (yet ?). So manual searching was done and only 2 GPIO pins (the default ones) matchs were found so far :
+
+| Signal | Board pin | GPIO chip | Line |
+|--------|-----------|-----------|------|
+| QSO    | GPIO10    | `/dev/gpiochip2` | 10 |
+| WAKE   | GPIO36    | `/dev/gpiochip0` | 4  |
+| SLEEP   | GPIO38 (or 37,39)    | `unknown` | unknown  |
+
+To remedy this, the current code has ``WAKE`` and `SLEEP` sharing the same button/pin to alternate between the states. 
+
+**Buttons & commands** equivalency :
+| Keyword | GPIO buttons | Simulates relay |
+|--------|-----------|-----------|
+| QSOON    | hold down QSO |relay ``in QSO`` state |
+| QSOOFF    | release QSO |relay ``exits QSO`` state|
+| OPEN1   | press WAKE    | relay enters ``OPEN1`` state |
+| OISIF   | press SLEEP*    | relay enters ``OISIF`` state | 
+
+_*As stated before, WAKE and SLEEP share the same button at the moment. So pressing WAKE when the relay is awake will send SLEEP instead_
 
 ### Running it
 
@@ -104,3 +129,84 @@ docker compose up -d --build
 ```
 
 `docker-compose.yml` runs two containers: `voxdole-app` (the voicemail) and `voxdole-web` (the web archive, on port 8080).
+
+And you can access/see the logs by attaching to the container :
+```bash
+docker attach voxdole-app
+```
+
+## Call Flow
+The flow of the app is as follows :
+![call flow of the app](assets/app_flow.svg)
+
+### Example interactions:
+#### Leaving a message
+_Note: the STT only listens when in QSO. So when the caller is supposed to speak the ``QSO`` button needs to be held down. This is to simulate the relay sending a continuous signal to the ``QSO`` pin when the relay is in the QSO state (see the `glutte github` for more info)_
+```md
+*Relay wakes up*
+
+Caller : Glutte, j'aimerais laisser un message.
+System : Ici Glutte, veuillez donner votre indicatif.
+
+Caller : Hotel Bravo Neuf Alpha Bravo Charlie.
+System : Bien reçu Hotel Bravo Neuf Alpha Bravo Charlie, quel est l'indicatif du destinataire ?
+
+Caller : Hotel Bravo Neuf Uniform Xray Lima.
+System : Le message sera délivré à Hotel Bravo Neuf Uniform Xray Lima. Veuillez le laisser après ce message.
+
+Caller : Salut, rappelle-moi quand tu as un moment, merci !
+
+System : Message enregistré. Au revoir.
+
+```
+
+To simulate, here is the flow with the button inputs :
+```md
+> press WAKE
+*relay wakes up*
+
+> hold down QSO
+Caller : Glutte, j'aimerais laisser un message.
+> release QSO
+System : Ici Glutte, veuillez donner votre indicatif.
+
+> hold down QSO
+Caller : Hotel Bravo Neuf Alpha Bravo Charlie.
+> release QSO
+System : Bien reçu Hotel Bravo Neuf Alpha Bravo Charlie, quel est l'indicatif du destinataire ?
+
+> hold down QSO
+Caller : Hotel Bravo Neuf Uniform Xray Lima.
+> release QSO
+System : Le message sera délivré à Hotel Bravo Neuf Uniform Xray Lima. Veuillez le laisser après ce message.
+
+> hold down QSO
+Caller : Salut, rappelle-moi quand tu as un moment, merci !
+> release QSO
+
+System : Message enregistré. Au revoir.
+```
+
+#### Listen to messages
+```md
+> press WAKE
+*relay wakes up*
+
+> hold down QSO
+Caller : Glutte, j'aimerais écouter mes messages.
+> release QSO
+System : Ici Glutte, veuillez donner votre indicatif.
+
+> hold down QSO
+Caller : Hotel Bravo Neuf Uniform Xray Lima.
+> release QSO
+System : Messages pour Hotel Bravo Neuf Uniform Xray Lima.
+System : Message de Hotel Bravo Neuf Alpha Bravo Charlie.
+System : *plays back the recorded message*
+System : Fin de vos messages. Au revoir.
+```
+
+## Web App
+A separate very simple web archive is also deployed on the board, accessible at ``http://<BOARD_IP>:8080``.
+It displays the messages left to the voicemail with timestamp, caller and recipient identifiers and allows the listening of the messages.
+![web ui example](assets/web.png)
