@@ -1,4 +1,19 @@
 # VoxDole
+- [VoxDole](#voxdole)
+  - [Project layout](#project-layout)
+  - [Getting set up (on your computer)](#getting-set-up-on-your-computer)
+    - [Getting the TTS voice model + audio clips](#getting-the-tts-voice-model--audio-clips)
+  - [Deploying to the board](#deploying-to-the-board)
+    - [Configuration](#configuration)
+      - [Audio devices](#audio-devices)
+      - [Relay signal](#relay-signal)
+    - [Running it](#running-it)
+  - [Call Flow](#call-flow)
+    - [Example interactions:](#example-interactions)
+      - [Leaving a message](#leaving-a-message)
+      - [Listen to messages](#listen-to-messages)
+  - [Web App](#web-app)
+
 
 VoxDole is an automated voicemail system for the [Glutte VHF relay on the Massif de la Dole](https://github.com/Glutte).
 built as part of my Bachelor thesis at HEIG-VD.
@@ -137,11 +152,11 @@ docker attach voxdole-app
 
 ## Call Flow
 The flow of the app is as follows :
-![call flow of the app](assets/app_flow.svg)
+![call flow of the app](assets/call_flow.svg)
 
 ### Example interactions:
 #### Leaving a message
-_Note: the STT only listens when in QSO. So when the caller is supposed to speak the ``QSO`` button needs to be held down. This is to simulate the relay sending a continuous signal to the ``QSO`` pin when the relay is in the QSO state (see the `glutte github` for more info)_
+_Note: the STT only listens when in QSO. So when the caller is supposed to speak the ``QSO`` button needs to be held down. This is to simulate the relay sending a continuous signal to the ``QSO`` pin when the relay is in the QSO state (see the [Glutte State Machine](https://github.com/Glutte/glutt-o-matique/blob/master/doc/statemachine.svg) for more info)_
 ```md
 *Relay wakes up*
 
