@@ -163,7 +163,7 @@ def main() -> None:
     print("Loading vosk-grammar ...")
     engine.load()
 
-    def audio_callback(indata, status) -> None:
+    def audio_callback(indata, frames, time, status) -> None:
         if status:
             print(status)
         frame = bytes(indata)
