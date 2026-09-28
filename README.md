@@ -24,6 +24,8 @@ call back later to hear it. All through using the relay as you would normally, b
 
 This project was built with the [Luna SL1680](https://labs.toradex.com/projects/luna-sl1680) board in mind so the code can be specific (eg. GPIO pins integration)
 
+_Voice interactions are currently French-only._
+
 ## Project layout
 
 The code is split into two parts. 
@@ -54,7 +56,7 @@ curl -L -o outboard/models/piper/fr_FR-siwis-medium.onnx \
 curl -L -o outboard/models/piper/fr_FR-siwis-medium.onnx.json \
     https://huggingface.co/rhasspy/piper-voices/resolve/main/fr/fr_FR/siwis/medium/fr_FR-siwis-medium.onnx.json
 ```
-_note: other piper models can be used here if you do not like siwis_
+_note: other piper models can be used here if you do not like siwis (https://rhasspy.github.io/piper-samples/)_
 
 Then generate the voice clips:
 
@@ -63,10 +65,14 @@ cd outboard
 python generate_tts.py
 ```
 
-This reads through `tts_manifest.txt` and writes one `.wav` file per line into
-`onboard/assets/tts/`. You are free to change the sentences in the manifest.
+This reads through `tts_manifest.txt` (the system's spoken prompts, e.g. "Ici Glutte, veuillez donner votre indicatif") and writes one `.wav` file per line into
+`onboard/assets/tts/`. **These `.wav` files are already committed in the repo so you only need to run this if you want to regenerate them** (e.g. after editing the manifest, or switching voice models).
 
 ## Deploying to the board
+
+The board ships with TorizonOS which includes Docker. 
+
+So just copy the code over and build:
 
 ```bash
 scp -r onboard torizon@<BOARD_IP>:~/voxdole
